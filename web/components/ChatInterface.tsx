@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, SetStateAction } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage, Model } from '@/lib/types';
-import { Send, Image as ImageIcon, X, Download } from 'lucide-react';
+import { Send, Image as ImageIcon, X, Download, PlayCircle } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -62,10 +62,17 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
   const downloadImage = (src: string) => {
       const link = document.createElement('a');
       link.href = src;
-      link.download = `image-${Date.now()}.png`;
+      link.download = `media-${Date.now()}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+  };
+
+  const isVideo = (url: string) => {
+      if (!url) return false;
+      const lower = url.toLowerCase();
+      // Check common extensions or simple heuristic
+      return lower.match(/\.(mp4|webm|mov|m4v)(\/|\?|$)/) || lower.includes('video');
   };
 
   return (
@@ -137,13 +144,31 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
                 <ReactMarkdown 
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    // Custom image renderer to ensure external links (like user provided) work
+                    // Handle standard images and "fake" images that are actually videos
                     img: ({node, ...props}) => {
                         const src = typeof props.src === 'string' ? props.src : '';
                         // Use the media proxy for remote URLs to ensure visibility and caching
                         const proxySrc = src.startsWith('http') 
                             ? `/api/media?url=${encodeURIComponent(src)}` 
                             : src;
+
+                        // Check if it looks like a video
+                        if (isVideo(src)) {
+                            return (
+                                <div className="my-2 rounded-lg overflow-hidden shadow-md max-w-full">
+                                    <video 
+                                        src={proxySrc} 
+                                        controls 
+                                        className="max-h-96 w-auto max-w-full"
+                                        preload="metadata"
+                                    />
+                                    <div className="bg-gray-100 dark:bg-gray-800 p-2 text-xs text-center text-gray-500 flex justify-center gap-2">
+                                        <span>Video detected</span>
+                                        <a href={proxySrc} download className="text-blue-600 hover:underline">Download</a>
+                                    </div>
+                                </div>
+                            );
+                        }
 
                         return (
                             <img 
@@ -154,7 +179,24 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
                             />
                         );
                     },
-                    // Code block styling could go here
+                    // Also intercept links that might be media
+                    a: ({node, ...props}) => {
+                        const href = typeof props.href === 'string' ? props.href : '';
+                        if (isVideo(href)) {
+                             const proxySrc = href.startsWith('http') 
+                                ? `/api/media?url=${encodeURIComponent(href)}` 
+                                : href;
+                             return (
+                                 <span className="inline-flex items-center gap-1 text-blue-600">
+                                     <PlayCircle size={14} />
+                                     <a {...props} href={proxySrc} target="_blank" rel="noopener noreferrer">
+                                         {props.children} (Video)
+                                     </a>
+                                 </span>
+                             );
+                        }
+                        return <a {...props} target="_blank" rel="noopener noreferrer" />;
+                    }
                   }}
                 >
                   {msg.content}
