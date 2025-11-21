@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, SetStateAction } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage, Model } from '@/lib/types';
@@ -139,10 +139,11 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
                   components={{
                     // Custom image renderer to ensure external links (like user provided) work
                     img: ({node, ...props}) => {
-                        const src = props.src || '';
+                        const src = typeof props.src === 'string' ? props.src : '';
                         return (
                             <img 
                                 {...props} 
+                                src={src}
                                 onClick={() => setPreviewImage(src)}
                                 className="max-h-96 w-auto max-w-full rounded-lg shadow-md my-2 cursor-pointer hover:opacity-90 transition-opacity" 
                             />
