@@ -140,11 +140,16 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
                     // Custom image renderer to ensure external links (like user provided) work
                     img: ({node, ...props}) => {
                         const src = typeof props.src === 'string' ? props.src : '';
+                        // Use the media proxy for remote URLs to ensure visibility and caching
+                        const proxySrc = src.startsWith('http') 
+                            ? `/api/media?url=${encodeURIComponent(src)}` 
+                            : src;
+
                         return (
                             <img 
                                 {...props} 
-                                src={src}
-                                onClick={() => setPreviewImage(src)}
+                                src={proxySrc}
+                                onClick={() => setPreviewImage(proxySrc)}
                                 className="max-h-96 w-auto max-w-full rounded-lg shadow-md my-2 cursor-pointer hover:opacity-90 transition-opacity" 
                             />
                         );
