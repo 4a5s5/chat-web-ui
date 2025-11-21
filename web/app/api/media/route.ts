@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import mime from 'mime-types'; // Need to install this or use a simple map
 
 // Directory to store downloaded media
 const DATA_DIR = path.join(process.cwd(), 'data');
