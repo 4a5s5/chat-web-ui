@@ -34,13 +34,28 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // On mobile, Enter usually creates a newline, we might want to keep that behavior or not.
-      // Typically on desktop Enter sends, Shift+Enter new line.
-      // On mobile it's often better to just let the button do the sending to avoid accidental sends.
-      // We can check window width or just stick to desktop convention.
       if (window.innerWidth >= 768) {
          handleSend();
       }
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result as string;
+                    setAttachedImages(prev => [...prev, base64]);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
     }
   };
 
@@ -298,6 +313,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={isVisionEnabled ? "输入消息..." : "输入消息..."}
             className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-md border border-gray-300 p-2 text-sm sm:text-base focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             rows={1}
