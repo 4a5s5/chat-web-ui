@@ -162,7 +162,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                             : src;
 
                         // Check if it looks like a video
-                        if (isVideo(src)) {
+                        if (isVideo(proxySrc)) {
                             return (
                                 <div className="my-2 rounded-lg overflow-hidden shadow-md max-w-full">
                                     <video 
@@ -191,10 +191,12 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                     // Also intercept links that might be media
                     a: ({node, ...props}) => {
                         const href = typeof props.href === 'string' ? props.href : '';
+                        // Always proxy links if they look like media, even inside anchor tags
+                        const proxySrc = href.startsWith('http') 
+                            ? `/api/media?url=${encodeURIComponent(href)}` 
+                            : href;
+
                         if (isVideo(href)) {
-                             const proxySrc = href.startsWith('http') 
-                                ? `/api/media?url=${encodeURIComponent(href)}` 
-                                : href;
                              return (
                                  <span className="inline-flex items-center gap-1 text-blue-600">
                                      <PlayCircle size={14} />
@@ -204,7 +206,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                                  </span>
                              );
                         }
-                        return <a {...props} target="_blank" rel="noopener noreferrer" />;
+                        return <a {...props} href={proxySrc} target="_blank" rel="noopener noreferrer" />;
                     }
                   }}
                 >
