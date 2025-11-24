@@ -8,6 +8,7 @@ import { ModelConfigModal } from '@/components/ModelConfigModal';
 import { ApiProfile, AppConfig, ChatMessage, Model } from '@/lib/types';
 import { fetchModels, sendChat } from '@/lib/api';
 import { v4 as uuidv4 } from 'uuid';
+import { Menu } from 'lucide-react';
 
 export default function Home() {
   // State
@@ -21,6 +22,9 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<Model | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Mobile sidebar state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Load initial state
   useEffect(() => {
@@ -188,16 +192,73 @@ export default function Home() {
     }
   };
 
+  const handleRegenerate = async () => {
+      if (isLoading || messages.length === 0) return;
+      
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role !== 'assistant') return;
+
+      // Remove the last assistant message
+      const messagesToKeep = messages.slice(0, -1);
+      setMessages(messagesToKeep);
+      setIsLoading(true);
+
+      // Create new placeholder
+      const assistantMsgId = uuidv4();
+      const placeholderMsg: ChatMessage = {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now()
+      };
+      setMessages([...messagesToKeep, placeholderMsg]);
+
+      try {
+        await sendChat(
+          messagesToKeep, // Send conversation up to previous user message
+          selectedModelId!,
+          config,
+          (streamedContent) => {
+            setMessages(prev => prev.map(m => 
+              m.id === assistantMsgId 
+                ? { ...m, content: streamedContent }
+                : m
+            ));
+          }
+        );
+      } catch (error) {
+        setMessages(prev => prev.map(m => 
+          m.id === assistantMsgId 
+            ? { ...m, content: 'Error: Failed to generate response.' }
+            : m
+        ));
+      } finally {
+        setIsLoading(false);
+      }
+  };
+
   const currentModel = models.find(m => m.id === selectedModelId) || null;
 
   return (
     <main className="flex h-screen w-full overflow-hidden bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
+      {/* Mobile Header Trigger */}
+      <div className="md:hidden fixed top-4 left-4 z-30">
+        <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 bg-white dark:bg-gray-800 rounded-md shadow-md"
+        >
+            <Menu size={24} />
+        </button>
+      </div>
+
       <Sidebar
         models={models}
         selectedModelId={selectedModelId}
         onSelectModel={setSelectedModelId}
         onEditModel={setEditingModel}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        isOpen={isSidebarOpen}
+        onCloseMobile={() => setIsSidebarOpen(false)}
       />
       
       <div className="flex-1 flex flex-col h-full min-w-0">
@@ -205,6 +266,7 @@ export default function Home() {
           messages={messages}
           currentModel={currentModel}
           onSendMessage={handleSendMessage}
+          onRegenerate={handleRegenerate}
           isLoading={isLoading}
         />
       </div>

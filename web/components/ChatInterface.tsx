@@ -2,16 +2,17 @@ import { useEffect, useRef, useState, SetStateAction } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage, Model } from '@/lib/types';
-import { Send, Image as ImageIcon, X, Download, PlayCircle } from 'lucide-react';
+import { Send, Image as ImageIcon, X, Download, PlayCircle, RefreshCw } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   currentModel: Model | null;
   onSendMessage: (content: string, images?: string[]) => void;
+  onRegenerate: () => void;
   isLoading: boolean;
 }
 
-export function ChatInterface({ messages, currentModel, onSendMessage, isLoading }: ChatInterfaceProps) {
+export function ChatInterface({ messages, currentModel, onSendMessage, onRegenerate, isLoading }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null); // For full screen preview
@@ -33,7 +34,13 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      // On mobile, Enter usually creates a newline, we might want to keep that behavior or not.
+      // Typically on desktop Enter sends, Shift+Enter new line.
+      // On mobile it's often better to just let the button do the sending to avoid accidental sends.
+      // We can check window width or just stick to desktop convention.
+      if (window.innerWidth >= 768) {
+         handleSend();
+      }
     }
   };
 
@@ -57,6 +64,8 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
   };
 
   const isVisionEnabled = currentModel?.capabilities?.vision;
+  const lastMessage = messages[messages.length - 1];
+  const canRegenerate = !isLoading && messages.length > 0 && lastMessage?.role === 'assistant';
 
   // Image saving helper
   const downloadImage = (src: string) => {
@@ -79,9 +88,9 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
     <div className="flex h-full flex-col overflow-hidden bg-gray-50 dark:bg-gray-900 min-w-0 relative">
       {/* Full Screen Image Preview Modal */}
       {previewImage && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90" onClick={() => setPreviewImage(null)}>
-              <div className="relative max-h-[90vh] max-w-[90vw]">
-                  <img src={previewImage} alt="Full Preview" className="max-h-[90vh] max-w-[90vw] object-contain" />
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImage(null)}>
+              <div className="relative max-h-[90vh] max-w-[90vw] flex justify-center">
+                  <img src={previewImage} alt="Full Preview" className="max-h-[90vh] max-w-full object-contain" />
                   <div className="absolute top-4 right-4 flex gap-4">
                       <button 
                           onClick={(e) => {
@@ -105,9 +114,9 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
       )}
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-4 sm:space-y-6">
         {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center text-gray-500">
+          <div className="flex h-full items-center justify-center text-gray-500 px-4 text-center">
             <p>选择模型并开始对话...</p>
           </div>
         )}
@@ -118,7 +127,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
             className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[90%] rounded-lg p-4 ${
+              className={`max-w-[95%] sm:max-w-[85%] rounded-lg p-3 sm:p-4 ${
                 msg.role === 'user'
                   ? 'bg-blue-600 text-white'
                   : 'bg-white shadow-sm dark:bg-gray-800 dark:text-gray-100'
@@ -133,14 +142,14 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
                       src={img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`}
                       alt="Upload" 
                       onClick={() => setPreviewImage(img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`)}
-                      className="h-32 w-auto rounded-md object-cover border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
+                      className="h-24 w-24 sm:h-32 sm:w-auto rounded-md object-cover border border-white/20 cursor-pointer hover:opacity-90 transition-opacity"
                     />
                   ))}
                 </div>
               )}
 
               {/* Message Content */}
-              <div className="prose prose-sm dark:prose-invert break-words overflow-hidden">
+              <div className="prose prose-sm dark:prose-invert break-words overflow-hidden max-w-none">
                 <ReactMarkdown 
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -159,7 +168,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
                                     <video 
                                         src={proxySrc} 
                                         controls 
-                                        className="max-h-96 w-auto max-w-full"
+                                        className="max-h-80 w-auto max-w-full"
                                         preload="metadata"
                                     />
                                     <div className="bg-gray-100 dark:bg-gray-800 p-2 text-xs text-center text-gray-500 flex justify-center gap-2">
@@ -175,7 +184,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
                                 {...props} 
                                 src={proxySrc}
                                 onClick={() => setPreviewImage(proxySrc)}
-                                className="max-h-96 w-auto max-w-full rounded-lg shadow-md my-2 cursor-pointer hover:opacity-90 transition-opacity" 
+                                className="max-h-80 w-auto max-w-full rounded-lg shadow-md my-2 cursor-pointer hover:opacity-90 transition-opacity" 
                             />
                         );
                     },
@@ -208,7 +217,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
         
         {isLoading && (
            <div className="flex justify-start">
-             <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+             <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-lg shadow-sm">
                <div className="flex space-x-2">
                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -221,12 +230,26 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
       </div>
 
       {/* Input Area */}
-      <div className="border-t bg-white p-4 dark:border-gray-700 dark:bg-gray-800 shrink-0">
+      <div className="border-t bg-white p-2 sm:p-4 dark:border-gray-700 dark:bg-gray-800 shrink-0">
+        
+        {/* Regenerate Button (Floating or inline?) - Let's put it above input if available */}
+        {canRegenerate && (
+            <div className="flex justify-center mb-2">
+                <button 
+                    onClick={onRegenerate}
+                    className="flex items-center gap-2 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs sm:text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                    <RefreshCw size={14} />
+                    重新生成
+                </button>
+            </div>
+        )}
+
         {/* Image Preview Area */}
         {attachedImages.length > 0 && (
           <div className="mb-2 flex gap-2 overflow-x-auto pb-2">
             {attachedImages.map((img, i) => (
-              <div key={i} className="relative h-20 w-20 shrink-0">
+              <div key={i} className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0">
                 <img
                   src={img}
                   alt="Preview"
@@ -257,7 +280,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
             />
             <label
               htmlFor="image-upload"
-              className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-md transition-colors ${
+              className={`flex h-10 w-10 sm:h-10 sm:w-10 cursor-pointer items-center justify-center rounded-md transition-colors ${
                 isVisionEnabled
                   ? 'text-gray-500 hover:bg-gray-100 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-gray-700'
                   : 'cursor-not-allowed text-gray-300 dark:text-gray-600'
@@ -273,8 +296,8 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isVisionEnabled ? "输入消息 (支持图片)..." : "输入消息..."}
-            className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            placeholder={isVisionEnabled ? "输入消息..." : "输入消息..."}
+            className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-md border border-gray-300 p-2 text-sm sm:text-base focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             rows={1}
             disabled={isLoading}
           />
@@ -283,13 +306,13 @@ export function ChatInterface({ messages, currentModel, onSendMessage, isLoading
           <button
             onClick={handleSend}
             disabled={isLoading || (!input.trim() && attachedImages.length === 0)}
-            className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-blue-300 dark:disabled:bg-blue-900"
+            className="flex h-10 w-10 sm:h-10 sm:w-10 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:bg-blue-300 dark:disabled:bg-blue-900"
           >
             <Send size={18} />
           </button>
         </div>
-        <div className="mt-1 text-xs text-gray-400 text-center">
-          {currentModel ? `${currentModel.name || currentModel.id} (${isVisionEnabled ? 'Vision' : 'Text'})` : 'No model selected'}
+        <div className="mt-1 text-xs text-gray-400 text-center truncate px-2">
+          {currentModel ? `${currentModel.name || currentModel.id}` : 'No model selected'}
         </div>
       </div>
     </div>
