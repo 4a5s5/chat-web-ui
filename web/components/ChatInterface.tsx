@@ -200,7 +200,7 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                              return (
                                  <span className="inline-flex items-center gap-1 text-blue-600">
                                      <PlayCircle size={14} />
-                                     <a {...props} href={proxySrc} target="_blank" rel="noopener noreferrer">
+                                     <a {...props} href={proxySrc} target="_blank" rel="noopener noreferrer" download>
                                          {props.children} (Video)
                                      </a>
                                  </span>
