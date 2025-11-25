@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, SetStateAction } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChatMessage, Model, SearchResult } from '@/lib/types';
-import { Send, Image as ImageIcon, X, Download, PlayCircle, RefreshCw, Globe, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChatMessage, Model } from '@/lib/types';
+import { Send, Image as ImageIcon, X, Download, PlayCircle, RefreshCw } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -10,54 +10,6 @@ interface ChatInterfaceProps {
   onSendMessage: (content: string, images?: string[]) => void;
   onRegenerate: () => void;
   isLoading: boolean;
-}
-
-// Sub-component for Search Results
-function SearchResultsDisplay({ results }: { results: SearchResult[] }) {
-    const [isOpen, setIsOpen] = useState(false);
-
-    if (!results || results.length === 0) return null;
-
-    return (
-        <div className="mb-4 rounded-md border bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
-            <button 
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-            >
-                <div className="flex items-center gap-2">
-                    <Globe size={16} className="text-blue-500" />
-                    <span>已搜索 {results.length} 个网页</span>
-                </div>
-                {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-            
-            {isOpen && (
-                <div className="border-t px-3 py-2 dark:border-gray-700">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                        {results.map((result, idx) => (
-                            <a 
-                                key={idx} 
-                                href={result.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="group block rounded p-2 hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-all"
-                            >
-                                <div className="text-xs font-medium text-blue-600 truncate group-hover:underline">
-                                    {result.title}
-                                </div>
-                                <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                    {result.url}
-                                </div>
-                                <div className="text-[10px] text-gray-600 dark:text-gray-400 line-clamp-2 mt-1">
-                                    {result.content}
-                                </div>
-                            </a>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
 }
 
 export function ChatInterface({ messages, currentModel, onSendMessage, onRegenerate, isLoading }: ChatInterfaceProps) {
@@ -196,11 +148,6 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                   : 'bg-white shadow-sm dark:bg-gray-800 dark:text-gray-100'
               }`}
             >
-              {/* Search Results Display */}
-              {msg.searchResults && msg.searchResults.length > 0 && (
-                  <SearchResultsDisplay results={msg.searchResults} />
-              )}
-
               {/* Display attached images for user messages */}
               {msg.role === 'user' && msg.images && msg.images.length > 0 && (
                 <div className="mb-2 flex gap-2 flex-wrap">
