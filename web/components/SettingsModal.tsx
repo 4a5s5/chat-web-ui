@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ApiProfile, AppConfig } from '@/lib/types';
-import { X, Plus, Trash2, Check, Edit2 } from 'lucide-react';
+import { X, Plus, Trash2, Check, Edit2, Search, Globe } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface SettingsModalProps {
@@ -9,17 +9,35 @@ interface SettingsModalProps {
   profiles: ApiProfile[];
   currentProfileId: string | null;
   onSaveProfiles: (profiles: ApiProfile[], activeId: string | null) => void;
+  
+  // Search Config
+  config: AppConfig;
+  onSaveConfig: (config: AppConfig) => void;
 }
 
-export function SettingsModal({ isOpen, onClose, profiles, currentProfileId, onSaveProfiles }: SettingsModalProps) {
+export function SettingsModal({ 
+    isOpen, 
+    onClose, 
+    profiles, 
+    currentProfileId, 
+    onSaveProfiles,
+    config,
+    onSaveConfig
+}: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<'api' | 'search'>('api');
+  
+  // API Profiles State
   const [localProfiles, setLocalProfiles] = useState<ApiProfile[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  // Form state
   const [formName, setFormName] = useState('');
   const [formBaseUrl, setFormBaseUrl] = useState('');
   const [formApiKey, setFormApiKey] = useState('');
+
+  // Search Config State
+  const [searchProvider, setSearchProvider] = useState<'tavily' | 'bing'>('tavily');
+  const [tavilyKey, setTavilyKey] = useState('');
+  const [bingKey, setBingKey] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -27,8 +45,13 @@ export function SettingsModal({ isOpen, onClose, profiles, currentProfileId, onS
       setActiveId(currentProfileId);
       setEditingId(null);
       resetForm();
+      
+      // Load search config
+      setSearchProvider(config.searchProvider || 'tavily');
+      setTavilyKey(config.tavilyKey || '');
+      setBingKey(config.bingKey || '');
     }
-  }, [isOpen, profiles, currentProfileId]);
+  }, [isOpen, profiles, currentProfileId, config]);
 
   const resetForm = () => {
     setFormName('');
@@ -60,14 +83,12 @@ export function SettingsModal({ isOpen, onClose, profiles, currentProfileId, onS
     if (!formName || !formBaseUrl || !formApiKey) return;
 
     if (editingId) {
-      // Update existing
       setLocalProfiles(prev => prev.map(p => 
         p.id === editingId 
           ? { ...p, name: formName, baseUrl: formBaseUrl, apiKey: formApiKey }
           : p
       ));
     } else {
-      // Add new
       const newProfile: ApiProfile = {
         id: uuidv4(),
         name: formName,
@@ -82,6 +103,15 @@ export function SettingsModal({ isOpen, onClose, profiles, currentProfileId, onS
 
   const handleSaveAll = () => {
     onSaveProfiles(localProfiles, activeId);
+    
+    // Save Search Config
+    onSaveConfig({
+        ...config, // Preserve other config if any
+        searchProvider,
+        tavilyKey,
+        bingKey
+    });
+
     onClose();
   };
 
@@ -92,132 +122,183 @@ export function SettingsModal({ isOpen, onClose, profiles, currentProfileId, onS
       <div className="flex h-[600px] w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl dark:bg-gray-800 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b p-4 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">API 设置</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">设置</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
             <X size={24} />
           </button>
         </div>
 
+        {/* Sidebar Tabs */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar: List of Profiles */}
-          <div className="w-1/3 border-r bg-gray-50 p-2 dark:bg-gray-900 dark:border-gray-700 overflow-y-auto">
-            <div className="mb-2 flex justify-between items-center px-2">
-                <span className="text-xs font-semibold text-gray-500">配置列表</span>
-                <button 
-                    onClick={resetForm}
-                    className="text-blue-600 hover:text-blue-700 text-xs flex items-center"
-                >
-                    <Plus size={14} className="mr-1" /> 新建
-                </button>
-            </div>
-            <div className="space-y-1">
-              {localProfiles.map(profile => (
-                <div
-                  key={profile.id}
-                  onClick={() => {
-                      // If we are not editing, select as active
-                      // If we want to edit, click edit button
-                      // But typically clicking row selects it as "current active candidate"
-                      handleSelect(profile.id);
-                  }}
-                  className={`group flex cursor-pointer items-center justify-between rounded-md p-2 text-sm transition-colors ${
-                    activeId === profile.id
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                      : 'hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  <div className="truncate font-medium">
-                    {profile.name}
-                    {activeId === profile.id && <span className="ml-2 text-xs text-blue-500">(当前)</span>}
-                  </div>
-                  <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEdit(profile); }}
-                      className="mr-1 p-1 hover:text-blue-600"
-                      title="编辑"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(profile.id); }}
-                      className="p-1 hover:text-red-600"
-                      title="删除"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {localProfiles.length === 0 && (
-                  <div className="p-4 text-center text-gray-500 text-xs">
-                      暂无配置，请在右侧添加
-                  </div>
-              )}
-            </div>
-          </div>
-
-          {/* Main: Edit Form */}
-          <div className="flex-1 p-6 overflow-y-auto bg-white dark:bg-gray-800">
-            <h3 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
-              {editingId ? '编辑配置' : '添加新配置'}
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  配置名称
-                </label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="例如：OpenAI, Local, Cherry..."
-                  className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  API Base URL
-                </label>
-                <input
-                  type="text"
-                  value={formBaseUrl}
-                  onChange={(e) => setFormBaseUrl(e.target.value)}
-                  placeholder="https://api.openai.com"
-                  className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  API Key
-                </label>
-                <input
-                  type="password"
-                  value={formApiKey}
-                  onChange={(e) => setFormApiKey(e.target.value)}
-                  placeholder="sk-..."
-                  className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-              <div className="flex justify-end pt-2">
+            <div className="w-48 border-r bg-gray-50 p-2 dark:bg-gray-900 dark:border-gray-700 flex flex-col gap-1">
                 <button
-                  onClick={handleSaveForm}
-                  disabled={!formName || !formBaseUrl || !formApiKey}
-                  className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+                    onClick={() => setActiveTab('api')}
+                    className={`flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                        activeTab === 'api' 
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' 
+                        : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800'
+                    }`}
                 >
-                  {editingId ? '更新配置' : '添加到列表'}
+                    <Globe size={16} />
+                    模型服务
                 </button>
-              </div>
+                <button
+                    onClick={() => setActiveTab('search')}
+                    className={`flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                        activeTab === 'search' 
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' 
+                        : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800'
+                    }`}
+                >
+                    <Search size={16} />
+                    网络搜索
+                </button>
             </div>
 
-             <div className="mt-8 border-t pt-4 dark:border-gray-700">
-                <p className="text-sm text-gray-500 mb-2">说明：</p>
-                <ul className="text-xs text-gray-400 list-disc pl-4 space-y-1">
-                    <li>点击左侧列表项可选择当前使用的配置。</li>
-                    <li>添加或修改后，需要点击下方的“保存并应用”才会生效。</li>
-                    <li>Base URL 请填写完整的地址，如 <code>https://api.openai.com</code>。</li>
-                </ul>
-             </div>
-          </div>
+            {/* Main Content */}
+            <div className="flex-1 p-6 overflow-y-auto bg-white dark:bg-gray-800">
+                
+                {/* API TAB Content */}
+                {activeTab === 'api' && (
+                    <div className="space-y-6">
+                        {/* List Area */}
+                        <div className="rounded-md border dark:border-gray-700">
+                            <div className="bg-gray-50 p-2 text-xs font-semibold text-gray-500 dark:bg-gray-900 dark:text-gray-400 flex justify-between items-center">
+                                <span>配置列表</span>
+                                <button onClick={resetForm} className="text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                                    <Plus size={14} /> 新建
+                                </button>
+                            </div>
+                            <div className="divide-y dark:divide-gray-700 max-h-40 overflow-y-auto">
+                                {localProfiles.map(profile => (
+                                    <div
+                                        key={profile.id}
+                                        onClick={() => handleSelect(profile.id)}
+                                        className={`flex cursor-pointer items-center justify-between p-3 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                            activeId === profile.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {activeId === profile.id && <Check size={14} className="text-blue-600" />}
+                                            <span className="font-medium text-gray-900 dark:text-white">{profile.name}</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(profile); }} className="text-gray-400 hover:text-blue-600"><Edit2 size={14} /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(profile.id); }} className="text-gray-400 hover:text-red-600"><Trash2 size={14} /></button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {localProfiles.length === 0 && <div className="p-4 text-center text-gray-500 text-xs">暂无配置</div>}
+                            </div>
+                        </div>
+
+                        {/* Form Area */}
+                        <div className="space-y-4 border-t pt-4 dark:border-gray-700">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                                {editingId ? '编辑配置' : '添加新配置'}
+                            </h3>
+                            <div className="grid gap-4">
+                                <input
+                                    type="text"
+                                    value={formName}
+                                    onChange={(e) => setFormName(e.target.value)}
+                                    placeholder="名称 (如 OpenAI)"
+                                    className="rounded-md border border-gray-300 p-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                                <input
+                                    type="text"
+                                    value={formBaseUrl}
+                                    onChange={(e) => setFormBaseUrl(e.target.value)}
+                                    placeholder="Base URL (如 https://api.openai.com)"
+                                    className="rounded-md border border-gray-300 p-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                                <input
+                                    type="password"
+                                    value={formApiKey}
+                                    onChange={(e) => setFormApiKey(e.target.value)}
+                                    placeholder="API Key"
+                                    className="rounded-md border border-gray-300 p-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={handleSaveForm}
+                                        disabled={!formName || !formBaseUrl || !formApiKey}
+                                        className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        {editingId ? '更新' : '添加'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SEARCH TAB Content */}
+                {activeTab === 'search' && (
+                    <div className="space-y-6">
+                        <div>
+                            <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
+                                默认搜索引擎
+                            </label>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => setSearchProvider('tavily')}
+                                    className={`rounded-lg border p-4 text-left transition-all ${
+                                        searchProvider === 'tavily'
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
+                                            : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                                    }`}
+                                >
+                                    <div className="font-semibold text-gray-900 dark:text-white">Tavily</div>
+                                    <div className="text-xs text-gray-500 mt-1">专为 LLM 优化的搜索 API</div>
+                                </button>
+                                <button
+                                    onClick={() => setSearchProvider('bing')}
+                                    className={`rounded-lg border p-4 text-left transition-all ${
+                                        searchProvider === 'bing'
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
+                                            : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                                    }`}
+                                >
+                                    <div className="font-semibold text-gray-900 dark:text-white">Bing Search</div>
+                                    <div className="text-xs text-gray-500 mt-1">微软官方 Bing 搜索 API</div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Tavily API Key
+                                </label>
+                                <input
+                                    type="password"
+                                    value={tavilyKey}
+                                    onChange={(e) => setTavilyKey(e.target.value)}
+                                    placeholder="tvly-..."
+                                    className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    如果没有 Key，请访问 <a href="https://tavily.com" target="_blank" className="text-blue-600 hover:underline">tavily.com</a> 申请。
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Bing Search API Key (Azure)
+                                </label>
+                                <input
+                                    type="password"
+                                    value={bingKey}
+                                    onChange={(e) => setBingKey(e.target.value)}
+                                    placeholder="Azure Bing Resource Key"
+                                    className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
 
         {/* Footer */}

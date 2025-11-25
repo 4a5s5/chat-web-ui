@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Model } from '@/lib/types';
-import { X, Save } from 'lucide-react';
+import { X, Save, Globe } from 'lucide-react';
 
 interface ModelConfigModalProps {
   isOpen: boolean;
@@ -27,7 +27,7 @@ export function ModelConfigModal({ isOpen, onClose, model, onSave }: ModelConfig
     }
   };
 
-  const toggleCapability = (cap: 'vision' | 'reasoning') => {
+  const toggleCapability = (cap: 'vision' | 'networking' | 'reasoning') => {
     setEditedModel(prev => {
       if (!prev) return null;
       const capabilities = prev.capabilities || {};
@@ -84,7 +84,7 @@ export function ModelConfigModal({ isOpen, onClose, model, onSave }: ModelConfig
 
           {/* Model Type / Capabilities */}
           <div className="flex items-start gap-4">
-            <div className="mt-2 w-24 shrink-0 text-sm font-medium text-gray-900 dark:text-gray-300">模型类型</div>
+            <div className="mt-2 w-24 shrink-0 text-sm font-medium text-gray-900 dark:text-gray-300">模型能力</div>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => toggleCapability('vision')}
@@ -96,13 +96,19 @@ export function ModelConfigModal({ isOpen, onClose, model, onSave }: ModelConfig
               >
                 👁 视觉
               </button>
-              {/* Add more capabilities as needed to match Cherry Studio UI */}
+              
               <button
-                className="cursor-not-allowed rounded-full bg-gray-100 px-4 py-1 text-sm text-gray-400 dark:bg-gray-700"
-                disabled
+                onClick={() => toggleCapability('networking')}
+                className={`rounded-full px-4 py-1 text-sm transition-colors flex items-center gap-1 ${
+                  editedModel.capabilities?.networking
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                }`}
               >
-                🌐 联网
+                <Globe size={14} />
+                联网
               </button>
+
               <button
                  className="cursor-not-allowed rounded-full bg-gray-100 px-4 py-1 text-sm text-gray-400 dark:bg-gray-700"
                  disabled
@@ -126,4 +132,3 @@ export function ModelConfigModal({ isOpen, onClose, model, onSave }: ModelConfig
     </div>
   );
 }
-

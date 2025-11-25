@@ -9,6 +9,7 @@ export interface Model {
   capabilities?: {
     vision?: boolean;
     reasoning?: boolean;
+    networking?: boolean; // New capability
   };
 }
 
@@ -24,6 +25,10 @@ export interface ChatMessage {
 export interface AppConfig {
   baseUrl: string;
   apiKey: string;
+  // Search configuration
+  searchProvider?: 'tavily' | 'bing';
+  tavilyKey?: string;
+  bingKey?: string;
 }
 
 export interface ApiProfile {

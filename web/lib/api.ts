@@ -28,6 +28,32 @@ export async function fetchModels(config: AppConfig): Promise<Model[]> {
   }
 }
 
+async function performSearch(query: string, config: AppConfig): Promise<string> {
+    if (!config.searchProvider) return '';
+    
+    const apiKey = config.searchProvider === 'tavily' ? config.tavilyKey : config.bingKey;
+    if (!apiKey) return '';
+
+    try {
+        const response = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query,
+                provider: config.searchProvider,
+                apiKey
+            })
+        });
+
+        if (!response.ok) return '';
+        const data = await response.json();
+        return data.results || '';
+    } catch (e) {
+        console.error('Search failed:', e);
+        return '';
+    }
+}
+
 export async function sendChat(
   messages: ChatMessage[],
   modelId: string,
@@ -39,8 +65,51 @@ export async function sendChat(
   if (!url.endsWith('/v1')) url += '/v1';
   const targetUrl = `${url}/chat/completions`;
 
+  // Check for model capability - we need to know if 'networking' is enabled for this model
+  // BUT, sendChat doesn't receive the full 'Model' object, only ID. 
+  // We rely on the caller to check capability or pass it. 
+  // Wait, we can just check localStorage here as a fallback or simpler approach?
+  // No, clean way: sendChat should logic internally or caller handles it.
+  // Let's hack: read local storage for custom model config to see if networking is enabled.
+  // OR better: Assume caller handles context injection?
+  // No, user asked for "Networking" feature.
+  // Let's modify sendChat to do search if needed.
+  // We need to check if 'networking' is active for this modelId.
+  
+  let apiMessages = [...messages];
+  
+  // --- Networking Logic ---
+  try {
+      const savedCustomizations = JSON.parse(localStorage.getItem('chat_custom_models') || '{}');
+      const modelConfig = savedCustomizations[modelId];
+      
+      // Logic: Only search if it's the LAST message and it's from USER
+      const lastMsg = messages[messages.length - 1];
+      
+      if (modelConfig?.capabilities?.networking && lastMsg?.role === 'user') {
+          onUpdate('🔍 Searching the web...');
+          const searchResults = await performSearch(lastMsg.content, config);
+          
+          if (searchResults) {
+              onUpdate('🔍 Analyzing search results...');
+              // Inject search results into a system message or augment the user message
+              // Augmenting user message is usually better for context retention
+              const augmentedContent = `Context from web search:\n${searchResults}\n\nUser Query: ${lastMsg.content}`;
+              
+              // Replace the last message content for the API call (not for the UI history)
+              apiMessages[apiMessages.length - 1] = {
+                  ...lastMsg,
+                  content: augmentedContent
+              };
+          }
+      }
+  } catch (e) {
+      console.error('Networking check failed', e);
+  }
+  // ------------------------
+
   // Format messages for OpenAI API
-  const apiMessages = messages.map(msg => {
+  const formattedMessages = apiMessages.map(msg => {
     if (msg.images && msg.images.length > 0) {
       return {
         role: msg.role,
@@ -77,7 +146,7 @@ export async function sendChat(
         },
         body: {
           model: modelId,
-          messages: apiMessages,
+          messages: formattedMessages,
           stream: true,
         }
       }),
@@ -103,8 +172,6 @@ export async function sendChat(
       buffer += chunk;
       
       const lines = buffer.split('\n');
-      // The last item in the array is either an empty string (if chunk ended with \n)
-      // or an incomplete line. We keep it in the buffer for the next iteration.
       buffer = lines.pop() || ''; 
 
       for (const line of lines) {
@@ -121,7 +188,6 @@ export async function sendChat(
               onUpdate(fullContent);
             }
           } catch (e) {
-            // Only log if it's not a known end-stream marker or harmless error
             console.warn('Error parsing SSE chunk:', e);
           }
         }
