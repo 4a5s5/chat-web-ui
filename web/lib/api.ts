@@ -1,4 +1,4 @@
-import { AppConfig, ChatMessage, Model } from './types';
+import { AppConfig, ChatMessage, Model, SearchResult } from './types';
 
 export async function fetchModels(config: AppConfig): Promise<Model[]> {
   if (!config.baseUrl || !config.apiKey) return [];
@@ -28,16 +28,15 @@ export async function fetchModels(config: AppConfig): Promise<Model[]> {
   }
 }
 
-async function performSearch(query: string, config: AppConfig): Promise<string> {
-    if (!config.searchProvider) return '';
+async function performSearch(query: string, config: AppConfig): Promise<SearchResult[]> {
+    if (!config.searchProvider) return [];
     
-    // For free providers, we don't need a key.
     const needsKey = ['tavily', 'bing_api', 'bocha', 'zhipu'].includes(config.searchProvider);
     let apiKey = '';
     if (config.searchProvider === 'tavily') apiKey = config.tavilyKey || '';
     if (config.searchProvider === 'bing_api') apiKey = config.bingKey || '';
     
-    if (needsKey && !apiKey) return '';
+    if (needsKey && !apiKey) return [];
 
     try {
         const response = await fetch('/api/search', {
@@ -53,12 +52,13 @@ async function performSearch(query: string, config: AppConfig): Promise<string> 
             })
         });
 
-        if (!response.ok) return '';
+        if (!response.ok) return [];
         const data = await response.json();
-        return data.results || '';
+        // Ensure we return the structured data array
+        return data.data || []; 
     } catch (e) {
         console.error('Search failed:', e);
-        return '';
+        return [];
     }
 }
 
@@ -66,7 +66,8 @@ export async function sendChat(
   messages: ChatMessage[],
   modelId: string,
   config: AppConfig,
-  onUpdate: (content: string) => void
+  onUpdate: (content: string) => void,
+  onSearchResults?: (results: SearchResult[]) => void
 ) {
   let url = config.baseUrl;
   if (url.endsWith('/')) url = url.slice(0, -1);
@@ -84,22 +85,31 @@ export async function sendChat(
       const lastMsg = messages[messages.length - 1];
       
       if (modelConfig?.capabilities?.networking && lastMsg?.role === 'user') {
-          onUpdate('🔍 Searching the web...');
+          onUpdate('🔍 Searching the web...'); // Optional status update, might want to skip if UI handles it
           const searchResults = await performSearch(lastMsg.content, config);
           
-          if (searchResults) {
-              onUpdate('🔍 Analyzing search results...');
-              // Inject search results into a system message or augment the user message
-              // Explicitly ask for citations in the prompt
-              const augmentedContent = `Context from web search:\n${searchResults}\n\nInstructions: Answer the user's query based on the context above. You MUST cite your sources at the end of your response using the format [1], [2], etc. matching the provided context sources.\n\nUser Query: ${lastMsg.content}`;
+          if (searchResults && searchResults.length > 0) {
+              // Pass results back to UI
+              if (onSearchResults) {
+                  onSearchResults(searchResults);
+              }
+
+              onUpdate(''); // Clear the "Searching" status text before streaming real answer
+
+              // Format results for LLM context
+              const contextString = searchResults.map((r, i) => 
+                  `[${i + 1}] Title: ${r.title}\nURL: ${r.url}\nContent: ${r.content}`
+              ).join('\n\n');
+
+              const augmentedContent = `Context from web search:\n${contextString}\n\nUser Query: ${lastMsg.content}`;
               
-              // Replace the last message content for the API call (not for the UI history)
+              // Replace the last message content for the API call
               apiMessages[apiMessages.length - 1] = {
                   ...lastMsg,
                   content: augmentedContent
               };
           } else {
-              onUpdate('🔍 No search results found, proceeding...');
+              onUpdate(''); 
           }
       }
   } catch (e) {
@@ -109,6 +119,9 @@ export async function sendChat(
 
   // Format messages for OpenAI API
   const formattedMessages = apiMessages.map(msg => {
+    // Strip searchResults from message sent to API if they exist in local state
+    // (Although ChatMessage type has it, OpenAI API doesn't accept it, but we build a new object here anyway)
+    
     if (msg.images && msg.images.length > 0) {
       return {
         role: msg.role,

@@ -13,6 +13,12 @@ export interface Model {
   };
 }
 
+export interface SearchResult {
+  title: string;
+  url: string;
+  content: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -20,6 +26,8 @@ export interface ChatMessage {
   timestamp: number;
   // For vision inputs
   images?: string[]; // base64 data strings
+  // For search results
+  searchResults?: SearchResult[];
 }
 
 export type SearchProvider = 'tavily' | 'bing_api' | 'bing_free' | 'google_free' | 'baidu_free' | 'searxng';

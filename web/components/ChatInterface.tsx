@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, SetStateAction } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChatMessage, Model } from '@/lib/types';
-import { Send, Image as ImageIcon, X, Download, PlayCircle, RefreshCw } from 'lucide-react';
+import { ChatMessage, Model, SearchResult } from '@/lib/types';
+import { Send, Image as ImageIcon, X, Download, PlayCircle, RefreshCw, Search, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -10,6 +10,49 @@ interface ChatInterfaceProps {
   onSendMessage: (content: string, images?: string[]) => void;
   onRegenerate: () => void;
   isLoading: boolean;
+}
+
+function SearchResults({ results }: { results: SearchResult[] }) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    if (!results || results.length === 0) return null;
+
+    return (
+        <div className="mb-4">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            >
+                <Search size={14} />
+                {results.length} 个搜索结果
+                {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+
+            {isOpen && (
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {results.map((result, idx) => (
+                        <a 
+                            key={idx}
+                            href={result.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group block rounded-lg border border-gray-200 bg-white p-3 text-sm transition-all hover:border-blue-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-700"
+                        >
+                            <div className="mb-1 flex items-start justify-between">
+                                <span className="line-clamp-1 font-medium text-gray-900 group-hover:text-blue-600 dark:text-gray-100 dark:group-hover:text-blue-400">
+                                    {result.title}
+                                </span>
+                                <ExternalLink size={12} className="text-gray-400 opacity-0 group-hover:opacity-100" />
+                            </div>
+                            <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
+                                {result.content}
+                            </p>
+                        </a>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function ChatInterface({ messages, currentModel, onSendMessage, onRegenerate, isLoading }: ChatInterfaceProps) {
@@ -161,6 +204,11 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                     />
                   ))}
                 </div>
+              )}
+
+              {/* Search Results Display */}
+              {msg.role === 'assistant' && msg.searchResults && (
+                  <SearchResults results={msg.searchResults} />
               )}
 
               {/* Message Content */}
