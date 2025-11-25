@@ -426,6 +426,8 @@ export default function Home() {
         profiles={profiles}
         currentProfileId={activeProfileId}
         onSaveProfiles={handleSaveProfiles}
+        config={config}
+        onSaveConfig={setConfig}
       />
 
       <ModelConfigModal
