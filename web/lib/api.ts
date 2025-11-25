@@ -31,8 +31,13 @@ export async function fetchModels(config: AppConfig): Promise<Model[]> {
 async function performSearch(query: string, config: AppConfig): Promise<string> {
     if (!config.searchProvider) return '';
     
-    const apiKey = config.searchProvider === 'tavily' ? config.tavilyKey : config.bingKey;
-    if (!apiKey) return '';
+    // For free providers, we don't need a key.
+    const needsKey = ['tavily', 'bing_api', 'bocha', 'zhipu'].includes(config.searchProvider);
+    let apiKey = '';
+    if (config.searchProvider === 'tavily') apiKey = config.tavilyKey || '';
+    if (config.searchProvider === 'bing_api') apiKey = config.bingKey || '';
+    
+    if (needsKey && !apiKey) return '';
 
     try {
         const response = await fetch('/api/search', {
@@ -41,7 +46,10 @@ async function performSearch(query: string, config: AppConfig): Promise<string> 
             body: JSON.stringify({
                 query,
                 provider: config.searchProvider,
-                apiKey
+                apiKey,
+                extraConfig: {
+                    searxngUrl: config.searxngUrl
+                }
             })
         });
 
@@ -65,17 +73,6 @@ export async function sendChat(
   if (!url.endsWith('/v1')) url += '/v1';
   const targetUrl = `${url}/chat/completions`;
 
-  // Check for model capability - we need to know if 'networking' is enabled for this model
-  // BUT, sendChat doesn't receive the full 'Model' object, only ID. 
-  // We rely on the caller to check capability or pass it. 
-  // Wait, we can just check localStorage here as a fallback or simpler approach?
-  // No, clean way: sendChat should logic internally or caller handles it.
-  // Let's hack: read local storage for custom model config to see if networking is enabled.
-  // OR better: Assume caller handles context injection?
-  // No, user asked for "Networking" feature.
-  // Let's modify sendChat to do search if needed.
-  // We need to check if 'networking' is active for this modelId.
-  
   let apiMessages = [...messages];
   
   // --- Networking Logic ---
@@ -93,14 +90,16 @@ export async function sendChat(
           if (searchResults) {
               onUpdate('🔍 Analyzing search results...');
               // Inject search results into a system message or augment the user message
-              // Augmenting user message is usually better for context retention
-              const augmentedContent = `Context from web search:\n${searchResults}\n\nUser Query: ${lastMsg.content}`;
+              // Explicitly ask for citations in the prompt
+              const augmentedContent = `Context from web search:\n${searchResults}\n\nInstructions: Answer the user's query based on the context above. You MUST cite your sources at the end of your response using the format [1], [2], etc. matching the provided context sources.\n\nUser Query: ${lastMsg.content}`;
               
               // Replace the last message content for the API call (not for the UI history)
               apiMessages[apiMessages.length - 1] = {
                   ...lastMsg,
                   content: augmentedContent
               };
+          } else {
+              onUpdate('🔍 No search results found, proceeding...');
           }
       }
   } catch (e) {

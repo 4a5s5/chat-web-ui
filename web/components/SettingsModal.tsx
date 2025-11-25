@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ApiProfile, AppConfig } from '@/lib/types';
+import { ApiProfile, AppConfig, SearchProvider } from '@/lib/types';
 import { X, Plus, Trash2, Check, Edit2, Search, Globe } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -35,9 +35,10 @@ export function SettingsModal({
   const [formApiKey, setFormApiKey] = useState('');
 
   // Search Config State
-  const [searchProvider, setSearchProvider] = useState<'tavily' | 'bing'>('tavily');
+  const [searchProvider, setSearchProvider] = useState<SearchProvider>('tavily');
   const [tavilyKey, setTavilyKey] = useState('');
   const [bingKey, setBingKey] = useState('');
+  const [searxngUrl, setSearxngUrl] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -50,6 +51,7 @@ export function SettingsModal({
       setSearchProvider(config.searchProvider || 'tavily');
       setTavilyKey(config.tavilyKey || '');
       setBingKey(config.bingKey || '');
+      setSearxngUrl(config.searxngUrl || '');
     }
   }, [isOpen, profiles, currentProfileId, config]);
 
@@ -106,20 +108,30 @@ export function SettingsModal({
     
     // Save Search Config
     onSaveConfig({
-        ...config, // Preserve other config if any
+        ...config, 
         searchProvider,
         tavilyKey,
-        bingKey
+        bingKey,
+        searxngUrl
     });
 
     onClose();
   };
 
+  const providers: { id: SearchProvider; name: string; desc: string; isFree?: boolean }[] = [
+      { id: 'tavily', name: 'Tavily', desc: '专为 LLM 优化 (推荐)', isFree: false },
+      { id: 'bing_api', name: 'Bing API', desc: '官方 API (稳定)', isFree: false },
+      { id: 'bing_free', name: 'Bing (Free)', desc: '网页抓取 (无需Key)', isFree: true },
+      { id: 'google_free', name: 'Google (Free)', desc: '网页抓取 (无需Key)', isFree: true },
+      { id: 'baidu_free', name: 'Baidu (Free)', desc: '网页抓取 (无需Key)', isFree: true },
+      { id: 'searxng', name: 'Searxng', desc: '元搜索引擎 (开源)', isFree: true },
+  ];
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="flex h-[600px] w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl dark:bg-gray-800 overflow-hidden">
+      <div className="flex h-[600px] w-full max-w-3xl flex-col rounded-lg bg-white shadow-xl dark:bg-gray-800 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b p-4 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">设置</h2>
@@ -240,61 +252,79 @@ export function SettingsModal({
                             <label className="mb-2 block text-sm font-medium text-gray-900 dark:text-white">
                                 默认搜索引擎
                             </label>
-                            <div className="grid grid-cols-2 gap-4">
-                                <button
-                                    onClick={() => setSearchProvider('tavily')}
-                                    className={`rounded-lg border p-4 text-left transition-all ${
-                                        searchProvider === 'tavily'
-                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
-                                            : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                                    }`}
-                                >
-                                    <div className="font-semibold text-gray-900 dark:text-white">Tavily</div>
-                                    <div className="text-xs text-gray-500 mt-1">专为 LLM 优化的搜索 API</div>
-                                </button>
-                                <button
-                                    onClick={() => setSearchProvider('bing')}
-                                    className={`rounded-lg border p-4 text-left transition-all ${
-                                        searchProvider === 'bing'
-                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
-                                            : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                                    }`}
-                                >
-                                    <div className="font-semibold text-gray-900 dark:text-white">Bing Search</div>
-                                    <div className="text-xs text-gray-500 mt-1">微软官方 Bing 搜索 API</div>
-                                </button>
+                            <div className="grid grid-cols-2 gap-3">
+                                {providers.map(p => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setSearchProvider(p.id)}
+                                        className={`rounded-lg border p-3 text-left transition-all ${
+                                            searchProvider === p.id
+                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
+                                                : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                                        }`}
+                                    >
+                                        <div className="font-semibold text-sm text-gray-900 dark:text-white flex justify-between">
+                                            {p.name}
+                                            {p.isFree && <span className="text-green-600 text-xs bg-green-100 px-1.5 py-0.5 rounded">Free</span>}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">{p.desc}</div>
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Tavily API Key
-                                </label>
-                                <input
-                                    type="password"
-                                    value={tavilyKey}
-                                    onChange={(e) => setTavilyKey(e.target.value)}
-                                    placeholder="tvly-..."
-                                    className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                />
-                                <p className="mt-1 text-xs text-gray-500">
-                                    如果没有 Key，请访问 <a href="https://tavily.com" target="_blank" className="text-blue-600 hover:underline">tavily.com</a> 申请。
-                                </p>
-                            </div>
+                        <div className="space-y-4 border-t pt-4 dark:border-gray-700">
+                            {searchProvider === 'tavily' && (
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Tavily API Key
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={tavilyKey}
+                                        onChange={(e) => setTavilyKey(e.target.value)}
+                                        placeholder="tvly-..."
+                                        className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+                            )}
 
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Bing Search API Key (Azure)
-                                </label>
-                                <input
-                                    type="password"
-                                    value={bingKey}
-                                    onChange={(e) => setBingKey(e.target.value)}
-                                    placeholder="Azure Bing Resource Key"
-                                    className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                />
-                            </div>
+                            {searchProvider === 'bing_api' && (
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Bing Search API Key (Azure)
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={bingKey}
+                                        onChange={(e) => setBingKey(e.target.value)}
+                                        placeholder="Azure Bing Resource Key"
+                                        className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+                            )}
+
+                            {searchProvider === 'searxng' && (
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Searxng Instance URL
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={searxngUrl}
+                                        onChange={(e) => setSearxngUrl(e.target.value)}
+                                        placeholder="https://searx.be"
+                                        className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">请提供一个公开的 Searxng 实例地址。</p>
+                                </div>
+                            )}
+
+                            {(searchProvider.includes('free')) && (
+                                <div className="p-3 bg-yellow-50 text-yellow-800 rounded-md text-xs dark:bg-yellow-900/20 dark:text-yellow-200">
+                                    注意：Free 模式通过网页抓取实现，可能因服务器 IP 被目标网站封禁而失效。建议优先使用 Tavily 或 Bing API。
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
