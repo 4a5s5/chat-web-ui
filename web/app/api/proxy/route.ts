@@ -20,10 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Handle streaming response
-    if (headers?.['Accept'] === 'text/event-stream' || 
-        response.headers.get('content-type')?.includes('text/event-stream') ||
-        body?.stream === true // Explicitly check body for stream flag as OpenAI clients usually set it there but headers might vary
-    ) {
+    if (headers?.['Accept'] === 'text/event-stream' || response.headers.get('content-type')?.includes('text/event-stream')) {
         return new Response(response.body, {
             headers: {
                 'Content-Type': 'text/event-stream',
@@ -71,3 +68,4 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+

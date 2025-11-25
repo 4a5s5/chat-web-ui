@@ -200,6 +200,80 @@ export default function Home() {
       }
   };
 
+  const handleSendMessage = async (content: string, images?: string[]) => {
+    if (!selectedModelId) return;
+
+    const newUserMsg: ChatMessage = {
+      id: uuidv4(),
+      role: 'user',
+      content,
+      images,
+      timestamp: Date.now()
+    };
+
+    const newMessages = [...messages, newUserMsg];
+    // Immediate state update for UI
+    setMessages(newMessages); 
+    // Persist to session
+    updateCurrentSession(newMessages, selectedModelId);
+
+    setIsLoading(true);
+
+    const assistantMsgId = uuidv4();
+    const placeholderMsg: ChatMessage = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now()
+    };
+    
+    // Add placeholder
+    const messagesWithPlaceholder = [...newMessages, placeholderMsg];
+    setMessages(messagesWithPlaceholder);
+    
+    // NOTE: We do NOT save the empty placeholder to session yet, 
+    // or we can, but usually we wait for some content. 
+    // Let's NOT save placeholder to session storage to avoid empty glitchy sessions if reload.
+    
+    try {
+      await sendChat(
+        newMessages, 
+        selectedModelId,
+        config,
+        (streamedContent) => {
+          setMessages(prev => {
+              const updated = prev.map(m => 
+                m.id === assistantMsgId ? { ...m, content: streamedContent } : m
+              );
+              return updated;
+          });
+          // Optimistically update session storage occasionally? 
+          // For performance, maybe only on completion.
+        }
+      );
+      
+      // On completion, save final state
+      setMessages(current => {
+          // 'current' here has the fully streamed content ideally, but React state updates might be batched.
+          // The safest way is to read the latest state. 
+          // Actually, 'streamedContent' callback closure issue:
+          // We rely on the fact that `sendChat` finishes.
+          // Let's re-read the latest messages from state in a timeout or assume the last update was correct?
+          // Better: The onUpdate updates state. After await sendChat, we need the final content.
+          // `sendChat` returns fullContent.
+          return current;
+      });
+      
+    } catch (error) {
+       // Error handling...
+    } finally {
+      // Need to capture the final state of messages including the assistant response to save it
+      // Since sendChat returns the full content, we can reconstruct
+      // But we need the ID.
+      setIsLoading(false);
+    }
+  };
+
   // Improved Send Handler to properly save completed message
   const handleSendMessageWrapper = async (content: string, images?: string[]) => {
       if (!selectedModelId) return;
@@ -223,34 +297,14 @@ export default function Home() {
       setMessages([...messagesAfterUser, placeholder]);
 
       try {
-          const fullContent = await sendChat(
-              messagesAfterUser, 
-              selectedModelId, 
-              config, 
-              (chunk) => {
-                  setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: chunk } : m));
-              },
-              (searchResults) => {
-                  setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, searchResults } : m));
-              }
-          );
-          
-          // Final Save - ensure search results are persisted if they exist in state
-          // We need to grab the latest state of the message to get searchResults if they were added
-          // Since setMessages is async, we might not have searchResults in 'placeholder' variable
-          // But we updated state in the callback.
-          // However, here we reconstruct the message.
-          // Let's assume search results came via callback and updated state. 
-          // We should use functional update to persist properties.
-          
-          setMessages(current => {
-              const finalMsg = current.find(m => m.id === assistantId);
-              const msgToSave = finalMsg ? { ...finalMsg, content: fullContent } : { ...placeholder, content: fullContent };
-              
-              const finalMessages = current.map(m => m.id === assistantId ? msgToSave : m);
-              updateCurrentSession(finalMessages, selectedModelId);
-              return finalMessages;
+          const fullContent = await sendChat(messagesAfterUser, selectedModelId, config, (chunk) => {
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: chunk } : m));
           });
+          
+          // Final Save
+          const finalMessages = [...messagesAfterUser, { ...placeholder, content: fullContent }];
+          setMessages(finalMessages);
+          updateCurrentSession(finalMessages, selectedModelId);
           
       } catch (err) {
           const errorMsg = { ...placeholder, content: 'Error: Failed to generate.' };
@@ -276,25 +330,13 @@ export default function Home() {
       setMessages([...messagesToKeep, placeholder]);
 
       try {
-          const fullContent = await sendChat(
-              messagesToKeep, 
-              selectedModelId, 
-              config, 
-              (chunk) => {
-                  setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: chunk } : m));
-              },
-              (searchResults) => {
-                  setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, searchResults } : m));
-              }
-          );
-          
-          setMessages(current => {
-              const finalMsg = current.find(m => m.id === assistantId);
-              const msgToSave = finalMsg ? { ...finalMsg, content: fullContent } : { ...placeholder, content: fullContent };
-              const finalMessages = current.map(m => m.id === assistantId ? msgToSave : m);
-              updateCurrentSession(finalMessages, selectedModelId);
-              return finalMessages;
+          const fullContent = await sendChat(messagesToKeep, selectedModelId, config, (chunk) => {
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: chunk } : m));
           });
+          
+          const finalMessages = [...messagesToKeep, { ...placeholder, content: fullContent }];
+          setMessages(finalMessages);
+          updateCurrentSession(finalMessages, selectedModelId);
 
       } catch (err) {
           // Error
@@ -384,8 +426,6 @@ export default function Home() {
         profiles={profiles}
         currentProfileId={activeProfileId}
         onSaveProfiles={handleSaveProfiles}
-        config={config}
-        onSaveConfig={setConfig}
       />
 
       <ModelConfigModal

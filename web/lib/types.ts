@@ -9,14 +9,7 @@ export interface Model {
   capabilities?: {
     vision?: boolean;
     reasoning?: boolean;
-    networking?: boolean;
   };
-}
-
-export interface SearchResult {
-  title: string;
-  url: string;
-  content: string;
 }
 
 export interface ChatMessage {
@@ -26,20 +19,11 @@ export interface ChatMessage {
   timestamp: number;
   // For vision inputs
   images?: string[]; // base64 data strings
-  // For search results
-  searchResults?: SearchResult[];
 }
-
-export type SearchProvider = 'tavily' | 'bing_api' | 'bing_free' | 'google_free' | 'baidu_free' | 'searxng';
 
 export interface AppConfig {
   baseUrl: string;
   apiKey: string;
-  // Search configuration
-  searchProvider?: SearchProvider;
-  tavilyKey?: string;
-  bingKey?: string; // Azure Bing Key
-  searxngUrl?: string; // Custom Searxng URL
 }
 
 export interface ApiProfile {

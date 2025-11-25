@@ -1,4 +1,4 @@
-import { AppConfig, ChatMessage, Model, SearchResult } from './types';
+import { AppConfig, ChatMessage, Model } from './types';
 
 export async function fetchModels(config: AppConfig): Promise<Model[]> {
   if (!config.baseUrl || !config.apiKey) return [];
@@ -28,100 +28,19 @@ export async function fetchModels(config: AppConfig): Promise<Model[]> {
   }
 }
 
-async function performSearch(query: string, config: AppConfig): Promise<SearchResult[]> {
-    if (!config.searchProvider) return [];
-    
-    const needsKey = ['tavily', 'bing_api', 'bocha', 'zhipu'].includes(config.searchProvider);
-    let apiKey = '';
-    if (config.searchProvider === 'tavily') apiKey = config.tavilyKey || '';
-    if (config.searchProvider === 'bing_api') apiKey = config.bingKey || '';
-    
-    if (needsKey && !apiKey) return [];
-
-    try {
-        const response = await fetch('/api/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query,
-                provider: config.searchProvider,
-                apiKey,
-                extraConfig: {
-                    searxngUrl: config.searxngUrl
-                }
-            })
-        });
-
-        if (!response.ok) return [];
-        const data = await response.json();
-        // Ensure we return the structured data array
-        return data.data || []; 
-    } catch (e) {
-        console.error('Search failed:', e);
-        return [];
-    }
-}
-
 export async function sendChat(
   messages: ChatMessage[],
   modelId: string,
   config: AppConfig,
-  onUpdate: (content: string) => void,
-  onSearchResults?: (results: SearchResult[]) => void
+  onUpdate: (content: string) => void
 ) {
   let url = config.baseUrl;
   if (url.endsWith('/')) url = url.slice(0, -1);
   if (!url.endsWith('/v1')) url += '/v1';
   const targetUrl = `${url}/chat/completions`;
 
-  let apiMessages = [...messages];
-  
-  // --- Networking Logic ---
-  try {
-      const savedCustomizations = JSON.parse(localStorage.getItem('chat_custom_models') || '{}');
-      const modelConfig = savedCustomizations[modelId];
-      
-      // Logic: Only search if it's the LAST message and it's from USER
-      const lastMsg = messages[messages.length - 1];
-      
-      if (modelConfig?.capabilities?.networking && lastMsg?.role === 'user') {
-          onUpdate('🔍 Searching the web...'); // Optional status update, might want to skip if UI handles it
-          const searchResults = await performSearch(lastMsg.content, config);
-          
-          if (searchResults && searchResults.length > 0) {
-              // Pass results back to UI
-              if (onSearchResults) {
-                  onSearchResults(searchResults);
-              }
-
-              onUpdate(''); // Clear the "Searching" status text before streaming real answer
-
-              // Format results for LLM context
-              const contextString = searchResults.map((r, i) => 
-                  `[${i + 1}] Title: ${r.title}\nURL: ${r.url}\nContent: ${r.content}`
-              ).join('\n\n');
-
-              const augmentedContent = `Context from web search:\n${contextString}\n\nUser Query: ${lastMsg.content}`;
-              
-              // Replace the last message content for the API call
-              apiMessages[apiMessages.length - 1] = {
-                  ...lastMsg,
-                  content: augmentedContent
-              };
-          } else {
-              onUpdate(''); 
-          }
-      }
-  } catch (e) {
-      console.error('Networking check failed', e);
-  }
-  // ------------------------
-
   // Format messages for OpenAI API
-  const formattedMessages = apiMessages.map(msg => {
-    // Strip searchResults from message sent to API if they exist in local state
-    // (Although ChatMessage type has it, OpenAI API doesn't accept it, but we build a new object here anyway)
-    
+  const apiMessages = messages.map(msg => {
     if (msg.images && msg.images.length > 0) {
       return {
         role: msg.role,
@@ -158,7 +77,7 @@ export async function sendChat(
         },
         body: {
           model: modelId,
-          messages: formattedMessages,
+          messages: apiMessages,
           stream: true,
         }
       }),
@@ -184,6 +103,8 @@ export async function sendChat(
       buffer += chunk;
       
       const lines = buffer.split('\n');
+      // The last item in the array is either an empty string (if chunk ended with \n)
+      // or an incomplete line. We keep it in the buffer for the next iteration.
       buffer = lines.pop() || ''; 
 
       for (const line of lines) {
@@ -200,6 +121,7 @@ export async function sendChat(
               onUpdate(fullContent);
             }
           } catch (e) {
+            // Only log if it's not a known end-stream marker or harmless error
             console.warn('Error parsing SSE chunk:', e);
           }
         }
