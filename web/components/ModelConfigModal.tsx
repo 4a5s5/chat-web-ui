@@ -27,7 +27,7 @@ export function ModelConfigModal({ isOpen, onClose, model, onSave }: ModelConfig
     }
   };
 
-  const toggleCapability = (cap: 'vision' | 'reasoning') => {
+  const toggleCapability = (cap: 'vision' | 'reasoning' | 'imageGeneration') => {
     setEditedModel(prev => {
       if (!prev) return null;
       const capabilities = prev.capabilities || {};
@@ -88,13 +88,21 @@ export function ModelConfigModal({ isOpen, onClose, model, onSave }: ModelConfig
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => toggleCapability('vision')}
-                className={`rounded-full px-4 py-1 text-sm transition-colors ${
-                  editedModel.capabilities?.vision
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                    : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                }`}
+                className={`rounded-full px-4 py-1 text-sm transition-colors ${editedModel.capabilities?.vision
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                  }`}
               >
                 👁 视觉
+              </button>
+              <button
+                onClick={() => toggleCapability('imageGeneration')}
+                className={`rounded-full px-4 py-1 text-sm transition-colors ${editedModel.capabilities?.imageGeneration
+                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                  }`}
+              >
+                🎨 生图
               </button>
               {/* Add more capabilities as needed to match Cherry Studio UI */}
               <button
@@ -104,8 +112,8 @@ export function ModelConfigModal({ isOpen, onClose, model, onSave }: ModelConfig
                 🌐 联网
               </button>
               <button
-                 className="cursor-not-allowed rounded-full bg-gray-100 px-4 py-1 text-sm text-gray-400 dark:bg-gray-700"
-                 disabled
+                className="cursor-not-allowed rounded-full bg-gray-100 px-4 py-1 text-sm text-gray-400 dark:bg-gray-700"
+                disabled
               >
                 ☀ 推理
               </button>

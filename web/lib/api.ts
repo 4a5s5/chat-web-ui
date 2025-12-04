@@ -1,4 +1,4 @@
-import { AppConfig, ChatMessage, Model } from './types';
+import { AppConfig, ChatMessage, ImageGenerationConfig, Model } from './types';
 
 export async function fetchModels(config: AppConfig): Promise<Model[]> {
   if (!config.baseUrl || !config.apiKey) return [];
@@ -101,16 +101,16 @@ export async function sendChat(
 
       const chunk = decoder.decode(value, { stream: true });
       buffer += chunk;
-      
+
       const lines = buffer.split('\n');
       // The last item in the array is either an empty string (if chunk ended with \n)
       // or an incomplete line. We keep it in the buffer for the next iteration.
-      buffer = lines.pop() || ''; 
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         const trimmedLine = line.trim();
         if (!trimmedLine || trimmedLine === 'data: [DONE]') continue;
-        
+
         if (trimmedLine.startsWith('data: ')) {
           const data = trimmedLine.slice(6);
           try {
@@ -127,10 +127,100 @@ export async function sendChat(
         }
       }
     }
-    
+
     return fullContent;
   } catch (error) {
     console.error('Chat error:', error);
+    throw error;
+  }
+}
+
+/**
+ * 调用图片生成 API
+ * @param prompt 图片描述
+ * @param modelId 模型ID
+ * @param config API配置
+ * @param imageConfig 生图配置参数
+ * @returns 生成的图片URL数组
+ */
+export async function generateImage(
+  prompt: string,
+  modelId: string,
+  config: AppConfig,
+  imageConfig?: ImageGenerationConfig
+): Promise<string[]> {
+  let url = config.baseUrl;
+  if (url.endsWith('/')) url = url.slice(0, -1);
+  if (!url.endsWith('/v1')) url += '/v1';
+  const targetUrl = `${url}/images/generations`;
+
+  // 构建请求体
+  const requestBody: Record<string, unknown> = {
+    prompt,
+    model: modelId,
+  };
+
+  // 添加可选参数
+  if (imageConfig?.size) {
+    requestBody.size = imageConfig.size;
+  }
+  if (imageConfig?.num_inference_steps !== undefined) {
+    requestBody.num_inference_steps = imageConfig.num_inference_steps;
+  }
+  if (imageConfig?.negative_prompt) {
+    requestBody.negative_prompt = imageConfig.negative_prompt;
+  }
+  if (imageConfig?.width !== undefined) {
+    requestBody.width = imageConfig.width;
+  }
+  if (imageConfig?.height !== undefined) {
+    requestBody.height = imageConfig.height;
+  }
+  if (imageConfig?.seed !== undefined) {
+    requestBody.seed = imageConfig.seed;
+  }
+
+  try {
+    const response = await fetch('/api/proxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        targetUrl,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`,
+        },
+        body: requestBody,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Image Generation Error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // 从响应中提取图片URL
+    // OpenAI格式: { data: [{ url: "..." }, ...] }
+    // 或者: { data: [{ b64_json: "..." }, ...] }
+    const images: string[] = [];
+    if (data.data && Array.isArray(data.data)) {
+      for (const item of data.data) {
+        if (item.url) {
+          images.push(item.url);
+        } else if (item.b64_json) {
+          images.push(`data:image/png;base64,${item.b64_json}`);
+        }
+      }
+    }
+
+    return images;
+  } catch (error) {
+    console.error('Image generation error:', error);
     throw error;
   }
 }

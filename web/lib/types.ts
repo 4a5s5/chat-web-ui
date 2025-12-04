@@ -9,7 +9,17 @@ export interface Model {
   capabilities?: {
     vision?: boolean;
     reasoning?: boolean;
+    imageGeneration?: boolean;
   };
+}
+
+export interface ImageGenerationConfig {
+  size?: string;              // 如 "2048x2048", "1024x1024"
+  num_inference_steps?: number; // 推理步数
+  negative_prompt?: string;   // 负面提示词
+  width?: number;             // 自定义宽度
+  height?: number;            // 自定义高度
+  seed?: number;              // 随机种子
 }
 
 export interface ChatMessage {
