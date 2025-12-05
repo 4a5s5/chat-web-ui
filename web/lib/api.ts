@@ -217,8 +217,25 @@ export async function generateImage(
           const proxiedUrl = `/api/media?url=${encodeURIComponent(item.url)}`;
           images.push(proxiedUrl);
         } else if (item.b64_json) {
-          // Base64 数据直接使用 data URI
-          images.push(`data:image/png;base64,${item.b64_json}`);
+          // Base64 数据保存到服务器，返回持久化 URL
+          try {
+            const saveResponse = await fetch('/api/save-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: `data:image/png;base64,${item.b64_json}` })
+            });
+            if (saveResponse.ok) {
+              const saveResult = await saveResponse.json();
+              images.push(saveResult.url); // e.g., /data/hash.png
+            } else {
+              // 如果保存失败，仍然返回 data URI（可能会导致 localStorage 问题）
+              console.warn('Failed to save image to server, using data URI');
+              images.push(`data:image/png;base64,${item.b64_json}`);
+            }
+          } catch (saveError) {
+            console.error('Error saving image:', saveError);
+            images.push(`data:image/png;base64,${item.b64_json}`);
+          }
         }
       }
     }
