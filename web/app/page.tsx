@@ -144,10 +144,40 @@ export default function Home() {
     }
   }, [config]);
 
-  // Save sessions helper
+  // Save sessions helper - sanitize to avoid localStorage quota issues
+  const sanitizeForStorage = (sessions: ChatSession[]): ChatSession[] => {
+    return sessions.map(session => ({
+      ...session,
+      messages: session.messages.map(msg => ({
+        ...msg,
+        // Remove large base64 images from storage, keep only URLs
+        images: msg.images?.filter(img => !img.startsWith('data:') || img.length < 10000),
+        // For assistant messages with inline base64 images, replace with placeholder
+        content: msg.role === 'assistant'
+          ? msg.content.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]{10000,}/g, '[图片已缓存]')
+          : msg.content
+      }))
+    }));
+  };
+
   const saveSessions = (newSessions: ChatSession[]) => {
     setSessions(newSessions);
-    localStorage.setItem('chat_sessions', JSON.stringify(newSessions));
+    try {
+      const sanitized = sanitizeForStorage(newSessions);
+      localStorage.setItem('chat_sessions', JSON.stringify(sanitized));
+    } catch (e) {
+      console.error('Failed to save sessions to localStorage:', e);
+      // If still fails, try to save with more aggressive cleanup
+      try {
+        const minimal = newSessions.map(s => ({
+          ...s,
+          messages: s.messages.slice(-20) // Keep only last 20 messages
+        }));
+        localStorage.setItem('chat_sessions', JSON.stringify(sanitizeForStorage(minimal)));
+      } catch (e2) {
+        console.error('Failed to save even minimal sessions:', e2);
+      }
+    }
   };
 
   const updateCurrentSession = (newMessages: ChatMessage[], modelId?: string) => {
