@@ -335,11 +335,15 @@ export default function Home() {
         updateCurrentSession(finalMessages, selectedModelId);
       }
 
-    } catch (err) {
-      const errorContent = isImageGen ? '❌ 图片生成出错，请检查配置后重试。' : 'Error: Failed to generate.';
+    } catch (err: any) {
+      console.error('Message generation error:', err);
+      const errorDetail = err?.message || String(err);
+      const errorContent = isImageGen
+        ? `❌ 图片生成出错: ${errorDetail}`
+        : `Error: ${errorDetail}`;
       const errorMsg = { ...placeholder, content: errorContent };
       setMessages([...messagesAfterUser, errorMsg]);
-      // Don't save error sessions? Or do?
+      updateCurrentSession([...messagesAfterUser, errorMsg], selectedModelId);
     } finally {
       setIsLoading(false);
     }
@@ -350,9 +354,16 @@ export default function Home() {
     const lastMsg = messages[messages.length - 1];
     if (lastMsg.role !== 'assistant') return;
 
+    const currentModelObj = models.find(m => m.id === selectedModelId);
+    const isImageGen = currentModelObj?.capabilities?.imageGeneration;
+
     const messagesToKeep = messages.slice(0, -1);
     setMessages(messagesToKeep);
     updateCurrentSession(messagesToKeep, selectedModelId); // Save state before regen
+
+    // 获取最后一条用户消息作为重新生成的输入
+    const lastUserMsg = messagesToKeep.filter(m => m.role === 'user').pop();
+    if (!lastUserMsg) return;
 
     setIsLoading(true);
     const assistantId = uuidv4();
@@ -360,16 +371,42 @@ export default function Home() {
     setMessages([...messagesToKeep, placeholder]);
 
     try {
-      const fullContent = await sendChat(messagesToKeep, selectedModelId, config, (chunk) => {
-        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: chunk } : m));
-      });
+      if (isImageGen) {
+        // Image generation mode
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: '🎨 正在重新生成图片...' } : m));
 
-      const finalMessages = [...messagesToKeep, { ...placeholder, content: fullContent }];
-      setMessages(finalMessages);
-      updateCurrentSession(finalMessages, selectedModelId);
+        const imageUrls = await generateImage(lastUserMsg.content, selectedModelId, config, imageConfig);
 
-    } catch (err) {
-      // Error
+        let responseContent = '';
+        if (imageUrls.length > 0) {
+          responseContent = imageUrls.map(url => `![生成的图片](${url})`).join('\n\n');
+        } else {
+          responseContent = '⚠️ 图片生成失败，请重试。';
+        }
+
+        const finalMessages = [...messagesToKeep, { ...placeholder, content: responseContent }];
+        setMessages(finalMessages);
+        updateCurrentSession(finalMessages, selectedModelId);
+      } else {
+        // Chat mode
+        const fullContent = await sendChat(messagesToKeep, selectedModelId, config, (chunk) => {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: chunk } : m));
+        });
+
+        const finalMessages = [...messagesToKeep, { ...placeholder, content: fullContent }];
+        setMessages(finalMessages);
+        updateCurrentSession(finalMessages, selectedModelId);
+      }
+
+    } catch (err: any) {
+      console.error('Regenerate error:', err);
+      const errorDetail = err?.message || String(err);
+      const errorContent = isImageGen
+        ? `❌ 图片重新生成出错: ${errorDetail}`
+        : `Error: ${errorDetail}`;
+      const errorMsg = { ...placeholder, content: errorContent };
+      setMessages([...messagesToKeep, errorMsg]);
+      updateCurrentSession([...messagesToKeep, errorMsg], selectedModelId);
     } finally {
       setIsLoading(false);
     }

@@ -158,7 +158,6 @@ export async function generateImage(
   const requestBody: Record<string, unknown> = {
     prompt,
     model: modelId,
-    response_format: 'b64_json', // 请求 base64 格式，避免临时 URL 问题
   };
 
   // 添加可选参数
