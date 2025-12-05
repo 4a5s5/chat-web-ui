@@ -141,7 +141,7 @@ export async function sendChat(
  * @param modelId 模型ID
  * @param config API配置
  * @param imageConfig 生图配置参数
- * @returns 生成的图片URL数组
+ * @returns 生成的图片URL数组 (已通过media proxy代理)
  */
 export async function generateImage(
   prompt: string,
@@ -158,6 +158,7 @@ export async function generateImage(
   const requestBody: Record<string, unknown> = {
     prompt,
     model: modelId,
+    response_format: 'b64_json', // 请求 base64 格式，避免临时 URL 问题
   };
 
   // 添加可选参数
@@ -203,6 +204,7 @@ export async function generateImage(
     }
 
     const data = await response.json();
+    console.log('Image generation response:', JSON.stringify(data, null, 2));
 
     // 从响应中提取图片URL
     // OpenAI格式: { data: [{ url: "..." }, ...] }
@@ -211,9 +213,29 @@ export async function generateImage(
     if (data.data && Array.isArray(data.data)) {
       for (const item of data.data) {
         if (item.url) {
-          images.push(item.url);
+          // 通过 media proxy 代理 URL，这样可以下载并缓存图片
+          // 同时解决 CORS 和临时 URL 过期问题
+          const proxiedUrl = `/api/media?url=${encodeURIComponent(item.url)}`;
+          images.push(proxiedUrl);
         } else if (item.b64_json) {
+          // Base64 数据直接使用 data URI
           images.push(`data:image/png;base64,${item.b64_json}`);
+        }
+      }
+    }
+
+    // 如果没有解析到图片，尝试其他可能的格式
+    if (images.length === 0) {
+      // 尝试直接从 data 获取 URL（一些 API 可能返回不同格式）
+      if (data.url) {
+        images.push(`/api/media?url=${encodeURIComponent(data.url)}`);
+      } else if (data.image_url) {
+        images.push(`/api/media?url=${encodeURIComponent(data.image_url)}`);
+      } else if (data.images && Array.isArray(data.images)) {
+        for (const imgUrl of data.images) {
+          if (typeof imgUrl === 'string') {
+            images.push(`/api/media?url=${encodeURIComponent(imgUrl)}`);
+          }
         }
       }
     }
