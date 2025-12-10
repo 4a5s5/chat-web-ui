@@ -516,6 +516,7 @@ export default function Home() {
           isLoading={isLoading}
           imageConfig={imageConfig}
           onImageConfigChange={setImageConfig}
+          apiBaseUrl={config.baseUrl}
         />
       </div>
 

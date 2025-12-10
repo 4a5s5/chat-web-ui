@@ -12,9 +12,10 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   imageConfig: ImageGenerationConfig;
   onImageConfigChange: (config: ImageGenerationConfig) => void;
+  apiBaseUrl?: string; // API base URL for resolving relative image paths
 }
 
-export function ChatInterface({ messages, currentModel, onSendMessage, onRegenerate, isLoading, imageConfig, onImageConfigChange }: ChatInterfaceProps) {
+export function ChatInterface({ messages, currentModel, onSendMessage, onRegenerate, isLoading, imageConfig, onImageConfigChange, apiBaseUrl }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null); // For full screen preview
@@ -174,24 +175,38 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                     // Handle standard images and "fake" images that are actually videos
                     img: ({ node, ...props }) => {
                       const src = typeof props.src === 'string' ? props.src : '';
-                      // Use the media proxy for remote URLs to ensure visibility and caching
-                      const proxySrc = src.startsWith('http')
-                        ? `/api/media?url=${encodeURIComponent(src)}`
-                        : src;
+
+                      // Resolve the image URL
+                      let resolvedSrc = src;
+                      if (src.startsWith('http')) {
+                        // Absolute URL - proxy it
+                        resolvedSrc = `/api/media?url=${encodeURIComponent(src)}`;
+                      } else if (src.startsWith('/') && !src.startsWith('/api/') && !src.startsWith('/data/')) {
+                        // Relative path (like /images/xxx) - need to prepend API base URL
+                        if (apiBaseUrl) {
+                          let baseUrl = apiBaseUrl;
+                          // Remove /v1 suffix if present
+                          if (baseUrl.endsWith('/v1')) baseUrl = baseUrl.slice(0, -3);
+                          if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+                          const fullUrl = `${baseUrl}${src}`;
+                          resolvedSrc = `/api/media?url=${encodeURIComponent(fullUrl)}`;
+                        }
+                      }
+                      // else: local paths like /data/xxx.png or data URIs - use as-is
 
                       // Check if it looks like a video
-                      if (isVideo(proxySrc)) {
+                      if (isVideo(resolvedSrc)) {
                         return (
                           <div className="my-2 rounded-lg overflow-hidden shadow-md max-w-full">
                             <video
-                              src={proxySrc}
+                              src={resolvedSrc}
                               controls
                               className="max-h-80 w-auto max-w-full"
                               preload="metadata"
                             />
                             <div className="bg-gray-100 dark:bg-gray-800 p-2 text-xs text-center text-gray-500 flex justify-center gap-2">
                               <span>Video detected</span>
-                              <a href={proxySrc} download className="text-blue-600 hover:underline">Download</a>
+                              <a href={resolvedSrc} download className="text-blue-600 hover:underline">Download</a>
                             </div>
                           </div>
                         );
@@ -200,8 +215,8 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                       return (
                         <img
                           {...props}
-                          src={proxySrc}
-                          onClick={() => setPreviewImage(proxySrc)}
+                          src={resolvedSrc}
+                          onClick={() => setPreviewImage(resolvedSrc)}
                           className="max-h-80 w-auto max-w-full rounded-lg shadow-md my-2 cursor-pointer hover:opacity-90 transition-opacity"
                         />
                       );
@@ -209,22 +224,32 @@ export function ChatInterface({ messages, currentModel, onSendMessage, onRegener
                     // Also intercept links that might be media
                     a: ({ node, ...props }) => {
                       const href = typeof props.href === 'string' ? props.href : '';
-                      // Always proxy links if they look like media, even inside anchor tags
-                      const proxySrc = href.startsWith('http')
-                        ? `/api/media?url=${encodeURIComponent(href)}`
-                        : href;
+
+                      // Resolve the link URL
+                      let resolvedHref = href;
+                      if (href.startsWith('http')) {
+                        resolvedHref = `/api/media?url=${encodeURIComponent(href)}`;
+                      } else if (href.startsWith('/') && !href.startsWith('/api/') && !href.startsWith('/data/')) {
+                        if (apiBaseUrl) {
+                          let baseUrl = apiBaseUrl;
+                          if (baseUrl.endsWith('/v1')) baseUrl = baseUrl.slice(0, -3);
+                          if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+                          const fullUrl = `${baseUrl}${href}`;
+                          resolvedHref = `/api/media?url=${encodeURIComponent(fullUrl)}`;
+                        }
+                      }
 
                       if (isVideo(href)) {
                         return (
                           <span className="inline-flex items-center gap-1 text-blue-600">
                             <PlayCircle size={14} />
-                            <a {...props} href={proxySrc} target="_blank" rel="noopener noreferrer" download>
+                            <a {...props} href={resolvedHref} target="_blank" rel="noopener noreferrer" download>
                               {props.children} (Video)
                             </a>
                           </span>
                         );
                       }
-                      return <a {...props} href={proxySrc} target="_blank" rel="noopener noreferrer" />;
+                      return <a {...props} href={resolvedHref} target="_blank" rel="noopener noreferrer" />;
                     }
                   }}
                 >
